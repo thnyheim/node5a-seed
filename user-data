@@ -4,10 +4,26 @@ autoinstall:
   locale: en_US.UTF-8
   keyboard:
     layout: us
+  network:
+    version: 2
+    ethernets:
+      primary:
+        match:
+          name: "en*"
+        addresses:
+          - "84.32.64.10/26"
+        routes:
+          - to: "default"
+            via: "84.32.64.1"
+        nameservers:
+          addresses: [10.100.0.53, 10.100.0.54]
+        dhcp4: false
+        dhcp6: false
   identity:
     hostname: lido-main-node-5a-nl3m
     username: bootstrap
-    # Locked password — key-only login. allow-pw is false below.
+    # Locked password — key-only. Seed is PUBLIC, so no credential goes here.
+    # Break-glass if networking still fails = Cherry rescue mode, not a baked password.
     password: "!"
   ssh:
     install-server: true
