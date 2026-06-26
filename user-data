@@ -1,0 +1,56 @@
+#cloud-config
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  identity:
+    hostname: lido-main-node-5a-nl3m
+    username: bootstrap
+    # Locked password — key-only login. allow-pw is false below.
+    password: "!"
+  ssh:
+    install-server: true
+    allow-pw: false
+    authorized-keys:
+      - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN4aGvIHqJ4EuzrlpRi1X9OXhkDmDuc0Qooa3A0pWb6E thomas@chainlayer.io"
+  storage:
+    config:
+      # --- Disks (match by path; serial glob from Jiri's template was wrong for these drives) ---
+      - {id: disk-os,   type: disk, path: /dev/nvme0n1, ptable: gpt, wipe: superblock-recursive, preserve: false, grub_device: true}
+      - {id: disk-data, type: disk, path: /dev/nvme1n1, ptable: gpt, wipe: superblock-recursive, preserve: false}
+      # --- EFI + LVM PV on the OS disk (nvme0n1) ---
+      - {id: p-efi, type: partition, device: disk-os, size: 512M, number: 1, flag: boot, grub_device: true}
+      - {id: f-efi, type: format, volume: p-efi, fstype: fat32}
+      - {id: m-efi, type: mount, device: f-efi, path: /boot/efi}
+      - {id: p-pv,  type: partition, device: disk-os, size: -1, number: 2}
+      - {id: vg0,   type: lvm_volgroup, name: vg0, devices: [p-pv]}
+      # --- LVM logical volumes (hardened mount options) ---
+      - {id: lv-root, type: lvm_partition, name: lv_root, volgroup: vg0, size: 30G}
+      - {id: f-root,  type: format, volume: lv-root, fstype: ext4}
+      - {id: m-root,  type: mount, device: f-root, path: /}
+      - {id: lv-var,  type: lvm_partition, name: lv_var, volgroup: vg0, size: 20G}
+      - {id: f-var,   type: format, volume: lv-var, fstype: ext4}
+      - {id: m-var,   type: mount, device: f-var, path: /var, options: "nodev,nosuid"}
+      - {id: lv-varlog, type: lvm_partition, name: lv_varlog, volgroup: vg0, size: 20G}
+      - {id: f-varlog,  type: format, volume: lv-varlog, fstype: ext4}
+      - {id: m-varlog,  type: mount, device: f-varlog, path: /var/log, options: "nodev,nosuid,noexec"}
+      - {id: lv-home, type: lvm_partition, name: lv_home, volgroup: vg0, size: 5G}
+      - {id: f-home,  type: format, volume: lv-home, fstype: ext4}
+      - {id: m-home,  type: mount, device: f-home, path: /home, options: "nodev,nosuid"}
+      - {id: lv-tmp,  type: lvm_partition, name: lv_tmp, volgroup: vg0, size: 10G}
+      - {id: f-tmp,   type: format, volume: lv-tmp, fstype: ext4}
+      - {id: m-tmp,   type: mount, device: f-tmp, path: /tmp, options: "nodev,nosuid,noexec"}
+      - {id: m-vartmp, type: mount, device: f-tmp, fstype: none, path: /var/tmp, spec: /tmp, options: "bind,nodev,nosuid,noexec"}
+      # --- Data disk (nvme1n1) -> /vm-datadisk (chain data; wiped fresh) ---
+      - {id: p-data, type: partition, device: disk-data, size: -1, number: 1}
+      - {id: f-data, type: format, volume: p-data, fstype: ext4}
+      - {id: m-data, type: mount, device: f-data, path: /vm-datadisk, options: "defaults,noatime"}
+  packages:
+    - openssh-server
+    - sudo
+  late-commands:
+    # Fleet-standard SSH port. The base playbook (ansible-role-ssh) reconciles full sshd config later.
+    - 'sed -i "s/^#\?Port .*/Port 2822/" /target/etc/ssh/sshd_config'
+  user-data:
+    disable_root: true
