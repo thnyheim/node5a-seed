@@ -52,5 +52,10 @@ autoinstall:
   late-commands:
     # Fleet-standard SSH port. The base playbook (ansible-role-ssh) reconciles full sshd config later.
     - 'sed -i "s/^#\?Port .*/Port 2822/" /target/etc/ssh/sshd_config'
+    # Passwordless sudo for the key-only bootstrap user — its password is locked,
+    # so group-sudo would prompt and fail (breaks Ansible become). Removed once the
+    # base playbook (ansible-role-ssh) provisions managed users. (sh-portable: no bashisms)
+    - 'echo "bootstrap ALL=(ALL) NOPASSWD:ALL" > /target/etc/sudoers.d/90-bootstrap'
+    - 'chmod 440 /target/etc/sudoers.d/90-bootstrap'
   user-data:
     disable_root: true
